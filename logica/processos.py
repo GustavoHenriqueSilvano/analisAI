@@ -1,17 +1,34 @@
 import re
 from collections import Counter
+from random import choice
 from ia_config import classificador, gerador_resposta
 
-#palavras chave para a IA
-OFFER_KEYWORDS = {
-    "oferta", "venda", "comprar", "consultor", "apresentar", "apresentação",
-    "demo", "demonstração", "proposta", "comercial", "promoção", "preço",
-    "agendar", "minuto", "contato comercial", "solução"
-}
+OFFER_KEYWORDS = {"oferta", "venda", "comprar", "consultor", "apresentar", "apresentação", "demo",
+                  "demonstração", "proposta", "comercial", "promoção", "preço", "agendar", "minuto",
+                  "contato comercial", "solução"}
 INVOICE_KEYWORDS = {"nota fiscal", "nota_fiscal", "nota", "fatura", "nf", "anexo"}
 REPORT_KEYWORDS = {"relatório", "relatorios", "dre", "fechamento", "balanço", "extrato"}
 INVITE_KEYWORDS = {"cafe", "café", "almoço", "jantar", "vamos", "encontro", "convite", "tomar um café"}
 GREETING_KEYWORDS = {"feliz natal", "feliz ano", "parabéns", "bom trabalho", "obrigado", "grato"}
+REQUEST_KEYWORDS = {"solicitamos", "favor enviar", "precisamos de", "gentileza de", "por favor", "pedimos"}
+URGENT_KEYWORDS = {"urgente", "prioridade máxima", "imediato", "favor confirmar", "atencao", "prazo"}
+
+TEMPLATES_VARIADAS = {
+    "invoice": ["Recebido, obrigado pelo envio.", "Obrigado, a nota foi recebida e será processada."],
+    "report": ["Recebido, obrigado pelo envio.", "Entendido, providenciaremos o relatório solicitado."],
+    "invite": ["Agradeço o contato, mas não consigo neste momento, combinamos em outro momento.",
+               "Obrigado pelo convite. Não consigo nesta semana, podemos reagendar."],
+    "offer": ["Ignorar | Propaganda ou conteúdo irrelevante.",
+              "Esta mensagem será ignorada, pois se trata de conteúdo comercial externo."],
+    "request": ["Entendido. Irei verificar e retornarei em breve.",
+                "Recebido, vou providenciar e retorno em breve.",
+                "Obrigado pelo aviso. Estou analisando e logo retorno."],
+    "high_priority": ["Recebi sua solicitação e vou verificar imediatamente, retornarei em breve.",
+                      "Vou providenciar a análise desta pendência e retorno em instantes.",
+                      "Obrigado pelo aviso. Estou verificando e logo retorno."]
+}
+
+SUGESTOES_RESPOSTA = [choice(v) for k,v in TEMPLATES_VARIADAS.items()]
 
 def preprocess_text(texto: str) -> str:
     if not texto:
@@ -22,10 +39,7 @@ def preprocess_text(texto: str) -> str:
 
 def contains_any(texto: str, keywords: set) -> bool:
     t = texto.lower()
-    for k in keywords:
-        if k in t:
-            return True
-    return False
+    return any(k in t for k in keywords)
 
 def remove_duplicacoes(texto: str) -> str:
     partes = [p.strip() for p in re.split(r'(?<=[.!?])\s+', texto) if p.strip()]
@@ -39,17 +53,15 @@ def first_sentences(texto: str, max_sentences: int = 2) -> str:
     matches = re.findall(r'[^.!?]+[.!?]?', texto)
     if not matches:
         return texto.strip()
-    selected = matches[:max_sentences]
-    return " ".join(s.strip() for s in selected).strip()
+    return " ".join(s.strip() for s in matches[:max_sentences]).strip()
 
 def is_bad_generated(texto: str) -> bool:
     if not texto or len(texto) < 6:
         return True
     low = texto.lower()
     bad_signs = ["meu amigo", "i am a", "i am", "doctor", "aaa", "..."]
-    for s in bad_signs:
-        if s in low:
-            return True
+    if any(s in low for s in bad_signs):
+        return True
     tokens = re.findall(r'\w+', low)
     if not tokens:
         return True
@@ -58,35 +70,34 @@ def is_bad_generated(texto: str) -> bool:
         return True
     return False
 
-#$ prompt base para gerar respostas
-SUGESTOES_RESPOSTA = [
-    "Entendido. Vou verificar e retorno em breve.",
-    "Obrigado por enviar a nota fiscal. Retornaremos após a análise.",
-    "Mensagem recebida. Aguardamos mais detalhes.",
-    "Ignorar | Propaganda ou conteúdo irrelevante.",
-    "Agradeço o convite, mas não consigo no momento. Podemos combinar em outra ocasião."
-]
-
-# prompt com sugestão de resposta
-def gerar_prompt_com_sugestoes(email: str) -> str:
-    sugestoes = "\n- " + "\n- ".join(SUGESTOES_RESPOSTA)
+def gerar_prompt_com_sugestoes(email: str, categoria: str = None) -> str:
+    categoria_texto = f"Categoria detectada: {categoria}." if categoria else ""
+    few_shot = (
+        "Exemplo 1:\nE-mail: Prezados, solicito envio do DRE até dia 30/09.\nResposta: Recebi sua solicitação e irei providenciar o envio até a data indicada.\n\n"
+        "Exemplo 2:\nE-mail: Bora jantar essa semana?\nResposta: Agradeço o convite, mas não consigo por enquanto, combinamos em outro momento.\n\n"
+        "Exemplo 3:\nE-mail: Encaminhamos em anexo a Nota Fiscal referente ao mês de agosto.\nResposta: Recebido, obrigado pelo envio.\n\n"
+        "Exemplo 4:\nE-mail: Solicito o agendamento do pagamento abaixo com prioridade máxima.\nResposta: Recebi sua solicitação e vou verificar imediatamente, retornarei em breve.\n\n"
+    )
     return (
-        "Responda profissionalmente ao e-mail abaixo com até duas frases. "
-        "Use uma linguagem objetiva, educada e clara. "
-        "Considere as sugestões abaixo como base, se forem apropriadas ao caso:\n"
-        f"{sugestoes}\n\nE-mail: {email}\n\nResposta:"
+        f"Você é uma assistente virtual que responde e-mails corporativos de forma profissional e natural. "
+        f"O objetivo é gerar uma resposta curta, objetiva e educada, sem parecer robotizada. "
+        f"Para e-mails internos da empresa (@empresa.com) ou com urgência, sempre considere como Produtivo "
+        f"e responda informando que a solicitação será verificada imediatamente. "
+        f"Evite respostas genéricas e adapte ao contexto real do e-mail. {categoria_texto}\n\n"
+        f"{few_shot}"
+        f"E-mail:\n{email}\n\n"
+        f"Responda como se fosse um humano, mantendo cordialidade e clareza, usando até duas frases:\nResposta:"
     )
 
-# resposta para heurística 
-TEMPLATES = {
-    "invoice": SUGESTOES_RESPOSTA[1],
-    "report": SUGESTOES_RESPOSTA[0],
-    "invite": SUGESTOES_RESPOSTA[4],
-    "offer": SUGESTOES_RESPOSTA[3]
-}
-
-def heuristic_category(texto: str):
+def heuristic_category(texto: str, remetente: str = ""):
     low = texto.lower()
+    remetente = remetente.lower()
+    if remetente.endswith("@empresa.com"):
+        return "Produtivo", "high_priority"
+    if contains_any(low, URGENT_KEYWORDS):
+        return "Produtivo", "high_priority"
+    if contains_any(low, REQUEST_KEYWORDS):
+        return "Produtivo", "request"
     if contains_any(low, OFFER_KEYWORDS):
         return "Improdutivo", "offer"
     if contains_any(low, INVITE_KEYWORDS):
@@ -99,53 +110,34 @@ def heuristic_category(texto: str):
         return "Improdutivo", "greeting"
     return None, None
 
-def analisar_texto(texto: str):
+def analisar_texto(texto: str, remetente: str = ""):
     texto_orig = texto or ""
     texto_limpo = preprocess_text(texto_orig)
-
-    heur_label, heur_sub = heuristic_category(texto_limpo)
-    if heur_label:
-        classificacao = heur_label
-    else:
-        try:
-            cls_result = classificador(
-                sequences=texto_limpo or " ",
-                candidate_labels=["Produtivo", "Improdutivo"],
-                hypothesis_template="Este e-mail é {}.",
-                truncation=True
-            )
-            top_label = cls_result.get("labels", [None])[0]
-            top_score = cls_result.get("scores", [0.0])[0]
-            classificacao = top_label or "Indefinido"
-        except Exception:
-            classificacao = "Indefinido"
-
+    heur_label, heur_sub = heuristic_category(texto_limpo, remetente=remetente)
+    classificacao = heur_label or None
     resposta = ""
-    if heur_sub in TEMPLATES:
-        resposta = TEMPLATES[heur_sub]
+    if heur_sub in TEMPLATES_VARIADAS:
+        resposta = choice(TEMPLATES_VARIADAS[heur_sub])
     else:
-        low = texto_limpo.lower()
         if classificacao == "Improdutivo":
-            resposta = SUGESTOES_RESPOSTA[3]
+            resposta = choice(TEMPLATES_VARIADAS.get("offer", SUGESTOES_RESPOSTA))
         elif classificacao == "Produtivo":
             try:
-                prompt = gerar_prompt_com_sugestoes(texto_orig)
+                prompt = gerar_prompt_com_sugestoes(texto_orig, categoria=classificacao)
                 gen = gerador_resposta(prompt)
                 generated = gen[0].get("generated_text", "").strip()
                 generated = remove_duplicacoes(generated)
                 generated = first_sentences(generated, max_sentences=2)
                 if is_bad_generated(generated):
-                    resposta = SUGESTOES_RESPOSTA[0]
+                    resposta = choice(TEMPLATES_VARIADAS.get("request", SUGESTOES_RESPOSTA))
                 else:
                     resposta = generated
             except Exception:
-                resposta = SUGESTOES_RESPOSTA[0]
+                resposta = choice(TEMPLATES_VARIADAS.get("request", SUGESTOES_RESPOSTA))
         else:
             resposta = "Mensagem recebida. Se for necessária alguma ação específica, favor detalhar."
-
     resposta = remove_duplicacoes(resposta).strip()
     resposta = re.sub(r"\s+", " ", resposta)
     if resposta and resposta[-1] not in ".!?":
         resposta += "."
-
-    return classificacao, resposta
+    return classificacao or "Indefinido", resposta
