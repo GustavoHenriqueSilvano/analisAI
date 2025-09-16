@@ -53,27 +53,22 @@ Siga os passos abaixo para configurar e rodar o projeto localmente:
 git clone https://github.com/GustavoHenriqueSilvano/analisAI
 cd analisAI
 
-### 2. Criar e ativar o ambiente virtual
+# Criar e ativar o ambiente virtual
 
-'''bash
 python -m venv venv
 
-'''bash
 #windows
 .\venv\Scripts\activate  
 
-'''bash
 #macOS/Linux
 source venv/bin/activate  
 
-### 3. Instalar dependências
+#Instalar dependências
 
-'''bash
 pip install -r requirements.txt
 
-### 4. Executar o projeto
+# Executar o projeto
 
-'''bash
 uvicorn main:app --reload  
 
 Com tudo isso, o projeto estará disponível em 👉 http://127.0.0.1:8000
