@@ -1,3 +1,0 @@
-ia_config.py
-
-#uvicorn main:app --reload
