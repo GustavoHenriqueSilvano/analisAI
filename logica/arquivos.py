@@ -6,10 +6,6 @@ from PyPDF2 import PdfReader
 class FileHandler:
     @staticmethod
     async def read_file(file: UploadFile) -> str:
-        """
-        Lê o conteúdo de arquivos PDF ou TXT.
-        Retorna texto extraído.
-        """
         if not file.filename.lower().endswith(('.pdf', '.txt')):
             raise ValueError(f"Formato não suportado: {file.filename}")
 

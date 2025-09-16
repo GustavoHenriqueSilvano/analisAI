@@ -14,6 +14,13 @@ Todos os direitos reservados © 2025
 
 ---
 
+## ⚖️ Licença
+
+Este projeto está licenciado sob a [MIT License](./LICENSE).  
+Você pode usar, modificar e distribuir o código, desde que mantenha o aviso de copyright.
+
+---
+
 ## ⚙️ Como Funciona
 
 - **Heurísticas**: identifica palavras-chave, remetentes internos (`@empresa.com`) e e-mails urgentes.  
