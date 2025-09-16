@@ -47,7 +47,7 @@ O sistema gera respostas **curtas, objetivas e humanizadas**, evitando respostas
 
 Siga os passos abaixo para configurar e rodar o projeto localmente:
 
-### Clonando o Repositório e executando
+### 1. Clonando o Repositório e executando
 
 ```bash
 git clone https://github.com/GustavoHenriqueSilvano/analisAI
