@@ -1,14 +1,13 @@
-# logica/processos.py
 import re
 from collections import Counter
 from ia_config import classificador, gerador_resposta
 
+#palavras chave para a IA
 OFFER_KEYWORDS = {
     "oferta", "venda", "comprar", "consultor", "apresentar", "apresentação",
     "demo", "demonstração", "proposta", "comercial", "promoção", "preço",
     "agendar", "minuto", "contato comercial", "solução"
 }
-
 INVOICE_KEYWORDS = {"nota fiscal", "nota_fiscal", "nota", "fatura", "nf", "anexo"}
 REPORT_KEYWORDS = {"relatório", "relatorios", "dre", "fechamento", "balanço", "extrato"}
 INVITE_KEYWORDS = {"cafe", "café", "almoço", "jantar", "vamos", "encontro", "convite", "tomar um café"}
@@ -47,7 +46,7 @@ def is_bad_generated(texto: str) -> bool:
     if not texto or len(texto) < 6:
         return True
     low = texto.lower()
-    bad_signs = ["meu amigo", "i am a", "i am", "doctor", "aaa", "..." ]
+    bad_signs = ["meu amigo", "i am a", "i am", "doctor", "aaa", "..."]
     for s in bad_signs:
         if s in low:
             return True
@@ -59,11 +58,31 @@ def is_bad_generated(texto: str) -> bool:
         return True
     return False
 
+#$ prompt base para gerar respostas
+SUGESTOES_RESPOSTA = [
+    "Entendido. Vou verificar e retorno em breve.",
+    "Obrigado por enviar a nota fiscal. Retornaremos após a análise.",
+    "Mensagem recebida. Aguardamos mais detalhes.",
+    "Ignorar | Propaganda ou conteúdo irrelevante.",
+    "Agradeço o convite, mas não consigo no momento. Podemos combinar em outra ocasião."
+]
+
+# prompt com sugestão de resposta
+def gerar_prompt_com_sugestoes(email: str) -> str:
+    sugestoes = "\n- " + "\n- ".join(SUGESTOES_RESPOSTA)
+    return (
+        "Responda profissionalmente ao e-mail abaixo com até duas frases. "
+        "Use uma linguagem objetiva, educada e clara. "
+        "Considere as sugestões abaixo como base, se forem apropriadas ao caso:\n"
+        f"{sugestoes}\n\nE-mail: {email}\n\nResposta:"
+    )
+
+# resposta para heurística 
 TEMPLATES = {
-    "invoice": "Obrigado por enviar a nota fiscal. Vou analisar e retorno em breve.",
-    "report": "Entendido. Vou verificar os relatórios e retornarei até o prazo solicitado.",
-    "invite": "Agradeço o convite, mas não consigo no momento. Podemos combinar em outra ocasião.",
-    "offer": "Ignorar | Mensagem de oferta/propaganda. Nenhuma ação necessária."
+    "invoice": SUGESTOES_RESPOSTA[1],
+    "report": SUGESTOES_RESPOSTA[0],
+    "invite": SUGESTOES_RESPOSTA[4],
+    "offer": SUGESTOES_RESPOSTA[3]
 }
 
 def heuristic_category(texto: str):
@@ -90,17 +109,14 @@ def analisar_texto(texto: str):
     else:
         try:
             cls_result = classificador(
-                sequences=texto_limpo or " ", 
+                sequences=texto_limpo or " ",
                 candidate_labels=["Produtivo", "Improdutivo"],
                 hypothesis_template="Este e-mail é {}.",
                 truncation=True
             )
             top_label = cls_result.get("labels", [None])[0]
             top_score = cls_result.get("scores", [0.0])[0]
-            if top_score < 0.55:
-                classificacao = top_label or "Indefinido"
-            else:
-                classificacao = top_label or "Indefinido"
+            classificacao = top_label or "Indefinido"
         except Exception:
             classificacao = "Indefinido"
 
@@ -110,42 +126,26 @@ def analisar_texto(texto: str):
     else:
         low = texto_limpo.lower()
         if classificacao == "Improdutivo":
-            resposta = "Ignorar | Mensagem não relacionada ao trabalho. Nenhuma ação necessária."
+            resposta = SUGESTOES_RESPOSTA[3]
         elif classificacao == "Produtivo":
-            if contains_any(low, INVOICE_KEYWORDS):
-                resposta = TEMPLATES["invoice"]
-            elif contains_any(low, REPORT_KEYWORDS):
-                resposta = TEMPLATES["report"]
-            else:
-                prompt = (
-                    "Você é assistente virtual de uma equipe financeira que responde emails em português.\n"
-                    "Leia o e-mail abaixo e gere UMA resposta curta, correta em português (acentuação correta), "
-                    "profissional e objetiva, com no máximo 2 frases. Não repita o conteúdo do e-mail.\n\n"
-                    f"E-mail: {texto_orig}\n\nResposta:"
-                )
-                try:
-                    gen = gerador_resposta(
-                        prompt,
-                        max_new_tokens=60,
-                        do_sample=False
-                    )
-                    generated = gen[0].get("generated_text", "")
-                    if generated.startswith(prompt):
-                        generated = generated[len(prompt):].strip()
-                    generated = remove_duplicacoes(generated).strip()
-                    generated = first_sentences(generated, max_sentences=2)
-                    if is_bad_generated(generated):
-                        resposta = "Entendido. Vou verificar e retorno em breve."
-                    else:
-                        resposta = generated
-                except Exception:
-                    resposta = "Entendido. Vou verificar e retorno em breve."
+            try:
+                prompt = gerar_prompt_com_sugestoes(texto_orig)
+                gen = gerador_resposta(prompt)
+                generated = gen[0].get("generated_text", "").strip()
+                generated = remove_duplicacoes(generated)
+                generated = first_sentences(generated, max_sentences=2)
+                if is_bad_generated(generated):
+                    resposta = SUGESTOES_RESPOSTA[0]
+                else:
+                    resposta = generated
+            except Exception:
+                resposta = SUGESTOES_RESPOSTA[0]
         else:
             resposta = "Mensagem recebida. Se for necessária alguma ação específica, favor detalhar."
 
     resposta = remove_duplicacoes(resposta).strip()
-    resposta = re.sub(r"\s+", " ", resposta) 
+    resposta = re.sub(r"\s+", " ", resposta)
     if resposta and resposta[-1] not in ".!?":
-        resposta = resposta + "."
+        resposta += "."
 
     return classificacao, resposta
