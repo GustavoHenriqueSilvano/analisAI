@@ -1,8 +1,3 @@
-# 📬 Case Prático AutoU - Automação de Respostas de E-mails
-
-Este projeto é um **case prático da AutoU**, desenvolvido **apenas para estudo**.  
-**Não possui caráter comercial** e **não deve ser usado comercialmente**.
-
 O objetivo é demonstrar uma solução para **automatizar a leitura, classificação e sugestão de respostas de e-mails corporativos**, liberando tempo da equipe para tarefas que exigem julgamento humano.
 
 ---

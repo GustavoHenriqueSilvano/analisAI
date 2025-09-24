@@ -14,3 +14,4 @@ gerador_resposta = pipeline(
     do_sample=False,
     temperature=0.2
 )
+''
